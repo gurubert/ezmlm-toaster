@@ -1,8 +1,9 @@
-ezmlm-toaster
-=============
+ezmlm-toaster Development
+=========================
 
 Creates users for qmail virtual domains to host ezmlm mailing lists (with ezmlm-web)
 
+This is the development branch.
 
 Use of git
 ----------
