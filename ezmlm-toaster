@@ -6,3 +6,86 @@
 # Released under GPLv2
 
 
+apacheconfig = """<VirtualHost %s:80>
+	ServerAdmin webmaster@%s
+	ServerName %s
+
+	DocumentRoot %s/public_html
+	RewriteEngine	On
+	RewriteRule	^/$	/cgi-bin/ezmlm [L,R=permanent]
+
+	ScriptAlias /cgi-bin %s/cgi-bin/
+
+	<Location "/">
+		AuthName "%s ezmlm"
+		AuthType Basic
+		AuthBasicProvider file
+		AuthUserFile %s/htpasswd
+		require valid-user
+	</Location>
+
+	ErrorLog ${APACHE_LOG_DIR}/%s-error.log
+
+	LogLevel warn
+
+	CustomLog ${APACHE_LOG_DIR}/%s-access.log combined
+</VirtualHost>
+"""
+
+ezmlmwebrc = """$LIST_DIR = "$HOME_DIR/lists";
+$MAIL_ADDRESS_PREFIX = "";
+$LANGUAGE_DIR = "/usr/share/ezmlm-web/lang";
+$TEMPLATE_DIR = "/usr/share/ezmlm-web/template";
+$UNSAFE_RM = 0;
+$ALIAS_USER = "alias";
+$QMAIL_BASE = $Mail::Ezmlm::QMAIL_BASE . '/control';
+$MAIL_DOMAIN = "%s";
+$PRETTY_NAMES = 1;
+$FILE_UPLOAD = 1;
+$DEFAULT_OPTIONS = "ABDFgHiJkLMNOPQRSTUWx";
+$HTML_TITLE = "ezmlm-web for %s";
+$HTML_CSS_COMMON = "/ezmlm-web/default.css";
+$HTML_CSS_COLOR = "/ezmlm-web/color-blue-gray.css";
+$HTML_LANGUAGE = "de";
+$DEBUG = 0;
+"""
+
+TODO = """
+Einmalig:
+
+cp /usr/share/doc/ezmlm-web/examples/apache.conf.dist /etc/apache2/conf.d/ezmlm
+a2enmod rewrite
+
+# /etc/init.d/apache2 restart 
+
+Site Creation:
+
+add IP to interfaces
+
+add domain:username to /var/qmail/control/virtualdomains
+add domain to /var/qmail/control/rcpthosts
+
+qmail-ctl restart
+
+useradd -m username
+mkdir /home/username/public_html
+mkdir /home/username/lists
+mkdir /home/username/cgi-bin
+ezmlm-web-make-suid username /home/username/cgi-bin/ezmlm
+htpasswd -cs /home/username/htpasswd webadmin
+
+add apache config in sites-available & sites-enabled
+
+SSL ?
+
+/etc/init.d/apache2 restart
+
+Site Deletion:
+
+remove domain from /var/qmail/control/virtualdomains & /var/qmail/control/rcpthosts
+remove apache config from sites-enabled
+
+qmail-ctl restart
+/etc/init.d/apache2 restart
+
+"""
