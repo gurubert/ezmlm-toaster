@@ -6,29 +6,39 @@
 # Released under GPLv2
 
 
-apacheconfig = """<VirtualHost %s:80>
-	ServerAdmin webmaster@%s
-	ServerName %s
+apacheconfig = """<VirtualHost {domain}:443>
+	ServerAdmin webmaster@{domain}
+	ServerName {domain}
 
-	DocumentRoot %s/public_html
+	DocumentRoot {userhome}/public_html
 	RewriteEngine	On
 	RewriteRule	^/$	/cgi-bin/ezmlm [L,R=permanent]
 
-	ScriptAlias /cgi-bin %s/cgi-bin/
+	ScriptAlias /cgi-bin {userhome}/cgi-bin/
 
 	<Location "/">
-		AuthName "%s ezmlm"
+		AuthName "{domain} ezmlm"
 		AuthType Basic
 		AuthBasicProvider file
-		AuthUserFile %s/htpasswd
+		AuthUserFile {userhome}/htpasswd
 		require valid-user
 	</Location>
 
-	ErrorLog ${APACHE_LOG_DIR}/%s-error.log
+	ErrorLog ${APACHE_LOG_DIR}/{domain}-error.log
 
 	LogLevel warn
 
-	CustomLog ${APACHE_LOG_DIR}/%s-access.log combined
+	CustomLog ${APACHE_LOG_DIR}/{domain}-access.log combined
+
+	SSLEngine on
+        SSLCertificateFile    /etc/ssl/certs/{domain}.pem
+        SSLCertificateKeyFile /etc/ssl/private/{domain}.key
+        <Directory {userhome}/cgi-bin>
+                SSLOptions +StdEnvVars
+        </Directory>
+        BrowserMatch "MSIE [2-6]" nokeepalive ssl-unclean-shutdown downgrade-1.0 force-response-1.0
+        BrowserMatch "MSIE [17-9]" ssl-unclean-shutdown
+
 </VirtualHost>
 """
 
@@ -43,7 +53,7 @@ $MAIL_DOMAIN = "%s";
 $PRETTY_NAMES = 1;
 $FILE_UPLOAD = 1;
 $DEFAULT_OPTIONS = "ABDFgHiJkLMNOPQRSTUWx";
-$HTML_TITLE = "ezmlm-web for %s";
+$HTML_TITLE = "ezmlm-web for {domain}";
 $HTML_CSS_COMMON = "/ezmlm-web/default.css";
 $HTML_CSS_COLOR = "/ezmlm-web/color-blue-gray.css";
 $HTML_LANGUAGE = "de";
@@ -55,6 +65,7 @@ Einmalig:
 
 cp /usr/share/doc/ezmlm-web/examples/apache.conf.dist /etc/apache2/conf.d/ezmlm
 a2enmod rewrite
+a2enmod ssl
 
 # /etc/init.d/apache2 restart 
 
@@ -76,7 +87,12 @@ htpasswd -cs /home/username/htpasswd webadmin
 
 add apache config in sites-available & sites-enabled
 
-SSL ?
+SSL:
+
+PASSWORD=`makepasswd  --chars=20`
+
+openssl req -new -x509 -keyout /etc/ssl/private/{domain}.key.enc -out /etc/ssl/certs/{domain}.crt -days 3600 -newkey rsa:4096 -passout env:PASSWORD -subj "C=DE/ST=Berlin/L=Berlin/O=Heinlein Support GmbH/OU=Hosting/CN={domain}/emailAddress=support@heinlein-hosting.de"
+openssl rsa -in /etc/ssl/private/{domain}.key.enc -out /etc/ssl/private/{domain}.key -passin env:PASSWORD
 
 /etc/init.d/apache2 restart
 
