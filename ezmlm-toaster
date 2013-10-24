@@ -5,7 +5,6 @@
 #
 # Released under GPLv2
 
-
 apacheconfig = """<VirtualHost {domain}:443>
 	ServerAdmin webmaster@{domain}
 	ServerName {domain}
@@ -60,6 +59,69 @@ $HTML_LANGUAGE = "de";
 $DEBUG = 0;
 """
 
+virtualdomains = '/var/qmail/control/virtualdomains'
+rcpthosts = '/var/qmail/control/rcpthosts'
+qmailsend = '/service/qmail-send'
+
+import argparse
+import os
+import pwd
+import sys
+import subprocess
+
+parser = argparse.ArgumentParser(description='Create or remove mailing list user for ezmlm.')
+parser.add_argument('username', help='Username for the virtual domain')
+parser.add_argument('--add' , '-a', metavar='domain', help='Domain name for the virtual domain')
+parser.add_argument('--delete' , '-d', action='store_true')
+args = parser.parse_args()
+
+if args.add:
+    try:
+        pwd.getpwnam(args.username)
+        print "User %s already exists" % args.username
+        sys.exit(1)
+    except KeyError:
+        pass
+    domain = args.add
+
+    if os.path.isfile(rcpthosts):
+        for line in open(rcpthosts).readlines():
+            if line.find(domain) > -1:
+                print "Domain already configured: %s" % line
+                sys.exit(1)
+
+    # add domain:username to /var/qmail/control/virtualdomains
+    v = open(virtualdomains, 'a')
+    v.write("%s:%s\n" % (domain, args.username))
+    v.close()
+
+    # add domain to /var/qmail/control/rcpthosts
+    r = open(rcpthosts, 'a')
+    r.write("%s\n" % domain)
+    r.close()
+
+    print subprocess.check_output(['/usr/sbin/useradd', '-m', args.username])
+
+    userinfo = pwd.getpwnam(args.username)
+
+    print subprocess.check_output(['/usr/bin/svc', '-h', qmailsend])
+
+    for dir in ["public_html", "lists", "cgi-bin"]:
+        os.mkdir(os.path.join(userinfo.pw_dir, dir), 0755)
+        os.chown(os.path.join(userinfo.pw_dir, dir), userinfo.pw_uid, userinfo.pw_gid)
+
+    print subprocess.check_output(['/usr/bin/ezmlm-web-make-suid', args.username, os.path.join(userinfo.pw_dir, "cgi-bin", "ezmlm")])
+
+    
+    
+
+if args.delete:
+    try:
+        userinfo = pwd.getpwnam(args.username)
+    except KeyError:
+        print "Unable to find user %s" % args.username
+        sys.exit(1)
+
 TODO = """
 Einmalig:
 
@@ -71,14 +133,10 @@ a2enmod ssl
 
 Site Creation:
 
-add IP to interfaces
 
-add domain:username to /var/qmail/control/virtualdomains
-add domain to /var/qmail/control/rcpthosts
-
-qmail-ctl restart
 
 useradd -m username
+qmail-ctl restart
 mkdir /home/username/public_html
 mkdir /home/username/lists
 mkdir /home/username/cgi-bin
