@@ -206,44 +206,52 @@ if args.delete:
         print "Unable to find user %s" % args.username
         sys.exit(1)
 
+    domain = None
+
+    vds = open(virtualdomains).readlines()
+    for vd in vds:
+        vdomain, user = vd.strip().split(':')
+        if user == userinfo.pw_name:
+            domain = vdomain
+    if not domain:
+        print "Domain not found for user %s" % userinfo.pw_name
+        sys.exit(1)
+
+    apachesitefile = os.path.join(apachesitesenabl, domain)
+    if not os.path.islink(apachesitefile):
+        print "Apache config not found in %s" % apachesitefile
+        sys.exit(1)
+
+    vds.remove("%s:%s\n" % (domain, userinfo.pw_name))
+    if not vds:
+        os.unlink(virtualdomains)
+        print "%s deleted" % virtualdomains
+    else:
+        v = open(virtualdomains, 'w')
+        v.write("".join(vds))
+        v.close()
+        print "%s removed from %s" % (domain, virtualdomains)
+
+    rc = open(rcpthosts).readlines()
+    rc.remove(domain+"\n")
+    r = open(rcpthosts, 'w')
+    r.write("".join(rc))
+    r.close()
+    print "%s removed from %s" % (domain, rcpthosts)
+
+    print subprocess.check_output(['/usr/bin/svc', '-h', qmailsend])
+    print "qmail reconfigured"
+
+    os.unlink(apachesitefile)
+    print "%s deleted" % apachesitefile
+
+    print subprocess.check_output(['service', 'apache2', 'restart'])
+
 TODO = """
 Einmalig:
 
 cp /usr/share/doc/ezmlm-web/examples/apache.conf.dist /etc/apache2/conf.d/ezmlm
 a2enmod rewrite
 a2enmod ssl
-
-# /etc/init.d/apache2 restart 
-
-Site Creation:
-
-
-
-useradd -m username
-qmail-ctl restart
-mkdir /home/username/public_html
-mkdir /home/username/lists
-mkdir /home/username/cgi-bin
-ezmlm-web-make-suid username /home/username/cgi-bin/ezmlm
-htpasswd -cs /home/username/htpasswd webadmin
-
-add apache config in sites-available & sites-enabled
-
-SSL:
-
-PASSWORD=`makepasswd  --chars=20`
-
-openssl req -new -x509 -keyout {userhome}/{domain}.key.enc -out {userhome}/{domain}.crt -days 3600 -newkey rsa:4096 -passout env:PASSWORD -subj "C=DE/ST=Berlin/L=Berlin/O=Heinlein Support GmbH/OU=Hosting/CN={domain}/emailAddress=support@heinlein-hosting.de"
-openssl rsa -in {userhome}/{domain}.key.enc -out {userhome}/{domain}.key -passin env:PASSWORD
-
-/etc/init.d/apache2 restart
-
-Site Deletion:
-
-remove domain from /var/qmail/control/virtualdomains & /var/qmail/control/rcpthosts
-remove apache config from sites-enabled
-
-qmail-ctl restart
-/etc/init.d/apache2 restart
 
 """
