@@ -68,6 +68,7 @@ import os
 import pwd
 import sys
 import subprocess
+import htpasswd
 
 parser = argparse.ArgumentParser(description='Create or remove mailing list user for ezmlm.')
 parser.add_argument('username', help='Username for the virtual domain')
