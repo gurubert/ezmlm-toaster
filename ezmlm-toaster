@@ -30,8 +30,8 @@ apacheconfig = """<VirtualHost {domain}:443>
 	CustomLog ${APACHE_LOG_DIR}/{domain}-access.log combined
 
 	SSLEngine on
-        SSLCertificateFile    /etc/ssl/certs/{domain}.pem
-        SSLCertificateKeyFile /etc/ssl/private/{domain}.key
+        SSLCertificateFile    {userhome}/{domain}.pem
+        SSLCertificateKeyFile {userhome}/{domain}.key
         <Directory {userhome}/cgi-bin>
                 SSLOptions +StdEnvVars
         </Directory>
@@ -150,8 +150,8 @@ SSL:
 
 PASSWORD=`makepasswd  --chars=20`
 
-openssl req -new -x509 -keyout /etc/ssl/private/{domain}.key.enc -out /etc/ssl/certs/{domain}.crt -days 3600 -newkey rsa:4096 -passout env:PASSWORD -subj "C=DE/ST=Berlin/L=Berlin/O=Heinlein Support GmbH/OU=Hosting/CN={domain}/emailAddress=support@heinlein-hosting.de"
-openssl rsa -in /etc/ssl/private/{domain}.key.enc -out /etc/ssl/private/{domain}.key -passin env:PASSWORD
+openssl req -new -x509 -keyout {userhome}/{domain}.key.enc -out {userhome}/{domain}.crt -days 3600 -newkey rsa:4096 -passout env:PASSWORD -subj "C=DE/ST=Berlin/L=Berlin/O=Heinlein Support GmbH/OU=Hosting/CN={domain}/emailAddress=support@heinlein-hosting.de"
+openssl rsa -in {userhome}/{domain}.key.enc -out {userhome}/{domain}.key -passin env:PASSWORD
 
 /etc/init.d/apache2 restart
 
