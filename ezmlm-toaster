@@ -5,6 +5,16 @@
 #
 # Released under GPLv2
 
+import argparse
+import os
+import pwd
+import sys
+import subprocess
+import htpasswd
+import getpass
+
+certsubj = '/C=DE/ST=Berlin/L=Berlin/O=Heinlein Support GmbH/OU=Hosting/CN={domain}/emailAddress=support@heinlein-hosting.de'
+
 apacheconfig = """<VirtualHost {domain}:443>
 	ServerAdmin webmaster@{domain}
 	ServerName {domain}
@@ -23,14 +33,14 @@ apacheconfig = """<VirtualHost {domain}:443>
 		require valid-user
 	</Location>
 
-	ErrorLog ${APACHE_LOG_DIR}/{domain}-error.log
+	ErrorLog ${{APACHE_LOG_DIR}}/{domain}-error.log
 
 	LogLevel warn
 
-	CustomLog ${APACHE_LOG_DIR}/{domain}-access.log combined
+	CustomLog ${{APACHE_LOG_DIR}}/{domain}-access.log combined
 
 	SSLEngine on
-        SSLCertificateFile    {userhome}/{domain}.pem
+        SSLCertificateFile    {userhome}/{domain}.crt
         SSLCertificateKeyFile {userhome}/{domain}.key
         <Directory {userhome}/cgi-bin>
                 SSLOptions +StdEnvVars
@@ -41,14 +51,14 @@ apacheconfig = """<VirtualHost {domain}:443>
 </VirtualHost>
 """
 
-ezmlmwebrc = """$LIST_DIR = "$HOME_DIR/lists";
+ezmlmwebrc = """$LIST_DIR = "{userhome}/lists";
 $MAIL_ADDRESS_PREFIX = "";
 $LANGUAGE_DIR = "/usr/share/ezmlm-web/lang";
 $TEMPLATE_DIR = "/usr/share/ezmlm-web/template";
 $UNSAFE_RM = 0;
 $ALIAS_USER = "alias";
 $QMAIL_BASE = $Mail::Ezmlm::QMAIL_BASE . '/control';
-$MAIL_DOMAIN = "%s";
+$MAIL_DOMAIN = "{domain}";
 $PRETTY_NAMES = 1;
 $FILE_UPLOAD = 1;
 $DEFAULT_OPTIONS = "ABDFgHiJkLMNOPQRSTUWx";
@@ -62,13 +72,9 @@ $DEBUG = 0;
 virtualdomains = '/var/qmail/control/virtualdomains'
 rcpthosts = '/var/qmail/control/rcpthosts'
 qmailsend = '/service/qmail-send'
-
-import argparse
-import os
-import pwd
-import sys
-import subprocess
-import htpasswd
+apachecfgdir = '/etc/apache2'
+apachesitesavail = os.path.join(apachecfgdir, 'sites-available')
+apachesitesenabl = os.path.join(apachecfgdir, 'sites-enabled')
 
 parser = argparse.ArgumentParser(description='Create or remove mailing list user for ezmlm.')
 parser.add_argument('username', help='Username for the virtual domain')
@@ -83,13 +89,44 @@ if args.add:
         sys.exit(1)
     except KeyError:
         pass
+
     domain = args.add
+    apachesitefile = os.path.join(apachesitesavail, domain)
 
     if os.path.isfile(rcpthosts):
         for line in open(rcpthosts).readlines():
             if line.find(domain) > -1:
                 print "Domain already configured: %s" % line
                 sys.exit(1)
+    else:
+        print "qmail is not properly installed, missing %s" % rcpthosts
+        sys.exit(1)
+
+    if os.path.isdir(apachesitesavail):
+        if os.path.isfile(apachesitefile):
+            print "Apache configuration exists: %s" % apachesitefile
+            sys.exit(1)
+    else:
+        print "Apache config dir %s not found" % apachesitesavail
+        sys.exit(1)
+
+    pass1 = getpass.getpass("Please enter a password for %s : " % args.username)
+    pass2 = getpass.getpass("Please re-enter password    %s : " % (" "*len(args.username)))
+
+    if pass1 != pass2:
+        print "Passwords do not match"
+        sys.exit(1)
+
+    print subprocess.check_output(['/usr/sbin/useradd', '-m', args.username])
+
+    userinfo = pwd.getpwnam(args.username)
+
+    # change password of system user
+    pipe = subprocess.Popen(["chpasswd"], stdin=subprocess.PIPE).stdin
+    pipe.write("%s:%s\n" % (args.username, pass1))
+    pipe.close()
+
+    print "User %s created with home directory in %s." % (userinfo.pw_name, userinfo.pw_dir)
 
     # add domain:username to /var/qmail/control/virtualdomains
     v = open(virtualdomains, 'a')
@@ -101,20 +138,66 @@ if args.add:
     r.write("%s\n" % domain)
     r.close()
 
-    print subprocess.check_output(['/usr/sbin/useradd', '-m', args.username])
-
-    userinfo = pwd.getpwnam(args.username)
-
     print subprocess.check_output(['/usr/bin/svc', '-h', qmailsend])
+    print "qmail configured"
 
     for dir in ["public_html", "lists", "cgi-bin"]:
         os.mkdir(os.path.join(userinfo.pw_dir, dir), 0755)
         os.chown(os.path.join(userinfo.pw_dir, dir), userinfo.pw_uid, userinfo.pw_gid)
+    print "directories created"
 
     print subprocess.check_output(['/usr/bin/ezmlm-web-make-suid', args.username, os.path.join(userinfo.pw_dir, "cgi-bin", "ezmlm")])
 
-    
-    
+    ezmlmwebrcfile = os.path.join(userinfo.pw_dir, '.ezmlmwebrc')
+    ezmlmwebrcfd = open(ezmlmwebrcfile, 'w')
+    ezmlmwebrcfd.write(ezmlmwebrc.format(userhome=userinfo.pw_dir, domain=domain))
+    ezmlmwebrcfd.close()
+    os.chown(ezmlmwebrcfile, userinfo.pw_uid, userinfo.pw_gid)
+    print "%s created" % ezmlmwebrcfile
+
+    webusersfile = os.path.join(userinfo.pw_dir, 'lists', 'webusers')
+    webusers = open(webusersfile, 'w')
+    webusers.write("ALL: %s\nALLOW_CREATE: %s\n" % (userinfo.pw_name, userinfo.pw_name))
+    webusers.close()
+    os.chown(webusersfile, userinfo.pw_uid, userinfo.pw_gid)
+    print "%s created" % webusersfile
+
+    # create htpasswd file
+    htpasswdfile = "%s/htpasswd" % userinfo.pw_dir
+    open(htpasswdfile, 'w')
+    with htpasswd.Basic(htpasswdfile) as userdb:
+        userdb.add(userinfo.pw_name, pass1)
+    os.chown(htpasswdfile, userinfo.pw_uid, userinfo.pw_gid)
+    print "%s created" % htpasswdfile
+
+    # Create SSL certificates
+    os.environ['PASSWORD'] = pass1
+
+    certfile = '{userhome}/{domain}.crt'.format(userhome=userinfo.pw_dir, domain=domain)
+    keyencfile = '{userhome}/{domain}.key.enc'.format(userhome=userinfo.pw_dir, domain=domain)
+    keyfile = '{userhome}/{domain}.key'.format(userhome=userinfo.pw_dir, domain=domain)
+
+    print subprocess.check_output(['/usr/bin/openssl', 'req', '-new', '-x509',
+                                   '-keyout', keyencfile,
+                                   '-out', certfile,
+                                   '-days', '3600', '-newkey', 'rsa:4096', '-passout', 'env:PASSWORD',
+                                   '-subj', certsubj.format(userhome=userinfo.pw_dir, domain=domain)])
+    print subprocess.check_output(['openssl', 'rsa',
+                                   '-in', keyencfile,
+                                   '-out', keyfile,
+                                   '-passin', 'env:PASSWORD'])
+    os.chown(certfile, userinfo.pw_uid, userinfo.pw_gid)
+    os.chown(keyencfile, userinfo.pw_uid, userinfo.pw_gid)
+    os.chown(keyfile, userinfo.pw_uid, userinfo.pw_gid)
+    os.chmod(keyfile, 0600)
+
+    apachesite = open(apachesitefile, 'w')
+    apachesite.write(apacheconfig.format(domain=domain, userhome=userinfo.pw_dir))
+    apachesite.close()
+    os.symlink(apachesitefile, os.path.join(apachesitesenabl, domain))
+    print "Apache configuration created in %s" % apachesitefile
+
+    print subprocess.check_output(['service', 'apache2', 'restart'])
 
 if args.delete:
     try:
