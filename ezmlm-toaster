@@ -15,7 +15,7 @@ import getpass
 
 certsubj = '/C=DE/ST=Berlin/L=Berlin/O=Heinlein Support GmbH/OU=Hosting/CN={domain}/emailAddress=support@heinlein-hosting.de'
 
-VERSION="X.Y"
+VERSION="0.1"
 
 apacheconfig = """<VirtualHost {domain}:443>
 	ServerAdmin webmaster@{domain}

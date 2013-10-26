@@ -10,8 +10,6 @@ On Debian based systems install it with:
 pypi-install orderedmultidict
 pypi-install htpasswd
 
-This is the development branch.
-
 Use of git
 ----------
 
