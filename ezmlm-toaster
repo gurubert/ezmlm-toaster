@@ -15,6 +15,8 @@ import getpass
 
 certsubj = '/C=DE/ST=Berlin/L=Berlin/O=Heinlein Support GmbH/OU=Hosting/CN={domain}/emailAddress=support@heinlein-hosting.de'
 
+VERSION="X.Y"
+
 apacheconfig = """
 <VirtualHost *:80>
 	ServerName {domain} 
@@ -88,6 +90,7 @@ parser = argparse.ArgumentParser(description='Create or remove mailing list user
 parser.add_argument('username', help='Username for the virtual domain')
 parser.add_argument('--add' , '-a', metavar='domain', help='Domain name for the virtual domain')
 parser.add_argument('--delete' , '-d', action='store_true')
+parser.add_argument('--version', action='version', version='ezmlm toaster script %s' % VERSION)
 args = parser.parse_args()
 
 if args.add:
