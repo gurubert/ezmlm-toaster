@@ -15,7 +15,15 @@ import getpass
 
 certsubj = '/C=DE/ST=Berlin/L=Berlin/O=Heinlein Support GmbH/OU=Hosting/CN={domain}/emailAddress=support@heinlein-hosting.de'
 
-apacheconfig = """<VirtualHost {domain}:443>
+apacheconfig = """
+<VirtualHost *:80>
+	ServerName {domain} 
+	RedirectPermanent / https://{domain}/cgi-bin/ezmlm
+	ErrorLog ${APACHE_LOG_DIR}/{domain}_error.log
+	CustomLog ${APACHE_LOG_DIR}/{domain}_access.log combined
+</VirtualHost>
+
+<VirtualHost *:443>
 	ServerAdmin webmaster@{domain}
 	ServerName {domain}
 
